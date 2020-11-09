@@ -182,7 +182,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   chunkSize: 16
-  processedDistance: 8
+  processedDistance: 2
   fileWorld: Saves/World
   filePlayer: Saves/Player
 --- !u!114 &624887713
@@ -335,7 +335,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   sensitivity: 2
   maxYAngle: 90
-  despawnDistance: 128
+  despawnDistance: 64
   movementSpeed: 2
 --- !u!20 &1463311678
 Camera:

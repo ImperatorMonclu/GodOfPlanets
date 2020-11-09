@@ -36,7 +36,7 @@ public class GameManager : Singleton<GameManager>
             {
                 for (int z = 0; z < size; ++z)
                 {
-                    Player.instance.grid[false].Add(new CubeStruct(new Vector3Int(x, y, z), 1));
+                    //Player.instance.grid[false].Add(new CubeStruct(new Vector3Int(x, y, z), 1));
                 }
             }
         }

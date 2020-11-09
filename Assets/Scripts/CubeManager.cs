@@ -4,13 +4,33 @@ using System.IO;
 using System;
 using UnityEngine;
 
+public struct QueueActionCube
+{
+    public bool add;
+    public ChunkPosition position;
+    public QueueActionCube(bool add, ChunkPosition position)
+    {
+        this.add = add;
+        this.position = position;
+    }
+}
 public struct Chunk
 {
     public byte[,,] chunk;
-    public Vector3Short position;
-    public Chunk(byte[,,] chunk, Vector3Short position)
+    public ChunkPosition position;
+    public Chunk(byte[,,] chunk, ChunkPosition position)
     {
         this.chunk = chunk;
+        this.position = position;
+    }
+}
+public struct ChunkPosition
+{
+    public long bytePosition;
+    public Vector3Short position;
+    public ChunkPosition(long bytePosition, Vector3Short position)
+    {
+        this.bytePosition = bytePosition;
         this.position = position;
     }
 }
@@ -22,184 +42,307 @@ public class CubeManager : Singleton<CubeManager>
     [Range(2, 64)]
     public float processedDistance = 8;
     public string fileWorld = "Saves/World";
-    public string filePlayer = "Saves/Player";
 
     private List<Chunk> loadedChunks;
-    private Queue<Chunk> processedChunks;
+    private Queue<QueueActionCube> processedChunks;
+    private Dictionary<Vector3Short, byte[,,]> dictChunks;
+    private Queue<Vector3Short> writeQueue;
     private Transform playerTransform;
 
     private void Awake()
     {
-        playerTransform = Player.instance.GetComponent<Transform>();
+        processedDistance *= chunkSize;
         loadedChunks = new List<Chunk>();
-        processedChunks = new Queue<Chunk>();
-        try
-        {
-            using (var fileStreamPlayer = new FileStream(filePlayer + ".bm", FileMode.Open))
-            {
-                var positionX = new byte[4];
-                for (var i = 0; i < 4; i++)
-                {
-                    positionX[i] = (byte)fileStreamPlayer.ReadByte();
-                }
-                var positionY = new byte[4];
-                for (var i = 0; i < 4; i++)
-                {
-                    positionY[i] = (byte)fileStreamPlayer.ReadByte();
-                }
-                var positionZ = new byte[4];
-                for (var i = 0; i < 4; i++)
-                {
-                    positionZ[i] = (byte)fileStreamPlayer.ReadByte();
-                }
-                Player.instance.transform.position = new Vector3(BitConverter.ToSingle(positionX, 0), BitConverter.ToSingle(positionY, 0), BitConverter.ToSingle(positionZ, 0));
-            }
-        }
-        catch
-        {
-            Debug.Log("Exception caught in process reading player information");
-        }
+        processedChunks = new Queue<QueueActionCube>();
+        dictChunks = new Dictionary<Vector3Short, byte[,,]>();
+        writeQueue = new Queue<Vector3Short>();
+        playerTransform = Player.instance.GetComponent<Transform>();
     }
 
     private void Start()
     {
-        //StartCoroutine(ReadWorldInfo());
-        //StartCoroutine(WriteWorldInfo());
-        StartCoroutine(UpdatePlayerInfo());
+        if (!ReadChunkInformation(new Vector3Short(Convert.ToInt16(playerTransform.position.x / chunkSize), Convert.ToInt16(playerTransform.position.y / chunkSize), Convert.ToInt16(playerTransform.position.z / chunkSize))))
+        {
+            writeQueue.Enqueue(new Vector3Short(Convert.ToInt16(playerTransform.position.x / chunkSize), Convert.ToInt16(playerTransform.position.y / chunkSize), Convert.ToInt16(playerTransform.position.z / chunkSize)));
+        }
+        StartCoroutine(WriteChunkInformation());
+        //StartCoroutine(WriteWorldInformation());
     }
 
     private void FixedUpdate()
     {
-        var playerPosition = playerTransform.position;
+        foreach (var chunk in loadedChunks)
+        {
+            if ((playerTransform.position - chunk.position.position.ToVector3Float() * chunkSize).magnitude >= processedDistance)
+            {
+                processedChunks.Enqueue(new QueueActionCube(false, chunk.position));
+            }
+        }
         if (processedChunks.Count > 0)
         {
-            var chunk = processedChunks.Dequeue();
-            var chunkPosition = chunk.position;
-            if ((playerTransform.position - chunkPosition.ToVector3Float() * chunkSize).magnitude < processedDistance && chunk.chunk != null)
+            Debug.Log(processedChunks.Count);
+            Debug.Log(loadedChunks.Count);
+            Debug.Log(dictChunks.Count);
+            var chunkAction = processedChunks.Dequeue();
+            var chunkPosition = chunkAction.position;
+            var chunkVectorPosition = chunkPosition.position;
+            if (chunkAction.add)
             {
-                var halfChunkSize = (int)chunkSize / 2;
-                for (var x = 0; x < chunkSize; x++)
+                if ((playerTransform.position - chunkVectorPosition.ToVector3Float() * chunkSize).magnitude < processedDistance)
                 {
-                    for (var y = 0; y < chunkSize; y++)
+                    if (dictChunks.ContainsKey(chunkVectorPosition) && dictChunks[chunkVectorPosition] != null)
                     {
-                        for (var z = 0; z < chunkSize; z++)
+                        var halfChunkSize = (int)chunkSize / 2;
+                        for (var x = 0; x < chunkSize; x++)
                         {
-                            if (chunk.chunk[x, y, z] != 0)
+                            for (var y = 0; y < chunkSize; y++)
                             {
-                                var addedChunk = new CubeStruct(new Vector3Int(chunkPosition.x * chunkSize + x - halfChunkSize, chunkPosition.y * chunkSize + y - halfChunkSize, chunkPosition.z * chunkSize + z - halfChunkSize), chunk.chunk[x, y, z]);
-                                if (!Player.instance.grid[false].Contains(addedChunk))
+                                for (var z = 0; z < chunkSize; z++)
                                 {
-                                    Player.instance.grid[false].Add(addedChunk);
+                                    if (dictChunks[chunkVectorPosition][x, y, z] != 0)
+                                    {
+                                        var addedCube = new CubeStruct(new Vector3Int(chunkVectorPosition.x * chunkSize + x - halfChunkSize, chunkVectorPosition.y * chunkSize + y - halfChunkSize, chunkVectorPosition.z * chunkSize + z - halfChunkSize), dictChunks[chunkVectorPosition][x, y, z]);
+                                        if (!Player.instance.grid[false].Contains(addedCube) && !Player.instance.grid[true].Contains(addedCube))
+                                        {
+                                            Player.instance.grid[false].Add(addedCube);
+                                        }
+                                    }
                                 }
                             }
                         }
+                        var chunk = new Chunk(dictChunks[chunkVectorPosition], chunkPosition);
+                        if (!loadedChunks.Contains(chunk))
+                        {
+                            loadedChunks.Add(chunk);
+                            var rightChunk = new Chunk(null, new ChunkPosition(-1, new Vector3Short(++chunkVectorPosition.x, chunkVectorPosition.y, chunkVectorPosition.z)));
+                            chunkVectorPosition.x--;
+                            var leftChunk = new Chunk(null, new ChunkPosition(-1, new Vector3Short(--chunkVectorPosition.x, chunkVectorPosition.y, chunkVectorPosition.z)));
+                            chunkVectorPosition.x++;
+                            var upChunk = new Chunk(null, new ChunkPosition(-1, new Vector3Short(chunkVectorPosition.x, ++chunkVectorPosition.y, chunkVectorPosition.z)));
+                            chunkVectorPosition.y--;
+                            var downChunk = new Chunk(null, new ChunkPosition(-1, new Vector3Short(chunkVectorPosition.x, --chunkVectorPosition.y, chunkVectorPosition.z)));
+                            chunkVectorPosition.y++;
+                            var forwardChunk = new Chunk(null, new ChunkPosition(-1, new Vector3Short(chunkVectorPosition.x, chunkVectorPosition.y, ++chunkVectorPosition.z)));
+                            chunkVectorPosition.z--;
+                            var backwardChunk = new Chunk(null, new ChunkPosition(-1, new Vector3Short(chunkVectorPosition.x, chunkVectorPosition.y, --chunkVectorPosition.z)));
+                            chunkVectorPosition.z++;
+                            if (!dictChunks.ContainsKey(rightChunk.position.position))
+                            {
+                                if (!ReadChunkInformation(rightChunk.position.position))
+                                {
+                                    writeQueue.Enqueue(rightChunk.position.position);
+                                    processedChunks.Enqueue(new QueueActionCube(true, rightChunk.position));
+                                }
+                            }
+                            if (!dictChunks.ContainsKey(leftChunk.position.position))
+                            {
+                                if (!ReadChunkInformation(leftChunk.position.position))
+                                {
+                                    writeQueue.Enqueue(leftChunk.position.position);
+                                    processedChunks.Enqueue(new QueueActionCube(true, leftChunk.position));
+                                }
+                            }
+                            if (!dictChunks.ContainsKey(upChunk.position.position))
+                            {
+                                if (!ReadChunkInformation(upChunk.position.position))
+                                {
+                                    writeQueue.Enqueue(upChunk.position.position);
+                                    processedChunks.Enqueue(new QueueActionCube(true, upChunk.position));
+                                }
+                            }
+                            if (!dictChunks.ContainsKey(downChunk.position.position))
+                            {
+                                if (!ReadChunkInformation(downChunk.position.position))
+                                {
+                                    writeQueue.Enqueue(downChunk.position.position);
+                                    processedChunks.Enqueue(new QueueActionCube(true, downChunk.position));
+                                }
+                            }
+                            if (!dictChunks.ContainsKey(forwardChunk.position.position))
+                            {
+                                if (!ReadChunkInformation(forwardChunk.position.position))
+                                {
+                                    writeQueue.Enqueue(forwardChunk.position.position);
+                                    processedChunks.Enqueue(new QueueActionCube(true, forwardChunk.position));
+                                }
+                            }
+                            if (!dictChunks.ContainsKey(backwardChunk.position.position))
+                            {
+                                if (!ReadChunkInformation(backwardChunk.position.position))
+                                {
+                                    writeQueue.Enqueue(backwardChunk.position.position);
+                                    processedChunks.Enqueue(new QueueActionCube(true, backwardChunk.position));
+                                }
+                            }
+                        }
+
                     }
-                }
-                if (!loadedChunks.Contains(chunk))
-                {
-                    loadedChunks.Add(chunk);
-                    var forwardChunk = new Chunk(null, new Vector3Short(++chunkPosition.x, chunkPosition.y, chunkPosition.z));
-                    chunkPosition.x--;
-                    var backwardChunk = new Chunk(null, new Vector3Short(--chunkPosition.x, chunkPosition.y, chunkPosition.z));
-                    chunkPosition.x++;
-                    var rightChunk = new Chunk(null, new Vector3Short(chunkPosition.x, ++chunkPosition.y, chunkPosition.z));
-                    chunkPosition.y++;
-                    var leftChunk = new Chunk(null, new Vector3Short(chunkPosition.x, --chunkPosition.y, chunkPosition.z));
-                    chunkPosition.y--;
-                    var upChunk = new Chunk(null, new Vector3Short(chunkPosition.x, chunkPosition.y, ++chunkPosition.z));
-                    chunkPosition.z++;
-                    var downChunk = new Chunk(null, new Vector3Short(chunkPosition.x, chunkPosition.y, --chunkPosition.z));
-                    chunkPosition.z--;
-                    if (!loadedChunks.Contains(forwardChunk) && !processedChunks.Contains(forwardChunk))
+                    else
                     {
-                        processedChunks.Enqueue(forwardChunk);
-                    }
-                    if (!loadedChunks.Contains(backwardChunk) && !processedChunks.Contains(backwardChunk))
-                    {
-                        processedChunks.Enqueue(backwardChunk);
-                    }
-                    if (!loadedChunks.Contains(rightChunk) && !processedChunks.Contains(rightChunk))
-                    {
-                        processedChunks.Enqueue(rightChunk);
-                    }
-                    if (!loadedChunks.Contains(leftChunk) && !processedChunks.Contains(leftChunk))
-                    {
-                        processedChunks.Enqueue(leftChunk);
-                    }
-                    if (!loadedChunks.Contains(upChunk) && !processedChunks.Contains(upChunk))
-                    {
-                        processedChunks.Enqueue(upChunk);
-                    }
-                    if (!loadedChunks.Contains(downChunk) && !processedChunks.Contains(downChunk))
-                    {
-                        processedChunks.Enqueue(downChunk);
+                        ReadChunkInformation(chunkPosition.position);
+                        processedChunks.Enqueue(chunkAction);
                     }
                 }
             }
             else
             {
-                processedChunks.Enqueue(chunk);
+                if (dictChunks.ContainsKey(chunkVectorPosition))
+                {
+                    var chunk = new Chunk(dictChunks[chunkVectorPosition], chunkPosition);
+                    if (loadedChunks.Contains(chunk))
+                    {
+                        loadedChunks.Remove(chunk);
+                    }
+                    dictChunks.Remove(chunkVectorPosition);
+                }
             }
         }
     }
 
-    private IEnumerator ReadWorldInfo()
+    private bool ReadChunkInformation(Vector3Short position)
     {
-        while (true)
+        var bytePosition = (long)-1;
+        try
         {
-            var processedChunks = this.processedChunks;
-            var loadedChunks = this.loadedChunks;
-            var chunkByteSize = chunkSize * chunkSize * chunkSize;
-            try
+            using (var fileStreamChunk = new FileStream(fileWorld + ".bm", FileMode.Open))
             {
-                using (var fileStreamPlayer = new FileStream(fileWorld + ".bm", FileMode.Open))
+                var chunkByteSize = chunkSize * chunkSize * chunkSize;
+                for (var i = 0; i < fileStreamChunk.Length; i += 6 + chunkByteSize)
                 {
-                    Chunk[] auxiliarChunks = new Chunk[processedChunks.Count];
-                    processedChunks.CopyTo(auxiliarChunks, 0);
-                    for (var i = 0; i < fileStreamPlayer.Length; i += chunkByteSize)
+                    fileStreamChunk.Seek(i, SeekOrigin.Begin);
+                    var positionX = new byte[2];
+                    for (var j = 0; j < 2; j++)
                     {
-                        var positionX = new byte[2];
-                        positionX[i++] = (byte)fileStreamPlayer.ReadByte();
-                        positionX[i++] = (byte)fileStreamPlayer.ReadByte();
-                        var positionY = new byte[2];
-                        positionY[i++] = (byte)fileStreamPlayer.ReadByte();
-                        positionY[i++] = (byte)fileStreamPlayer.ReadByte();
-                        var positionZ = new byte[2];
-                        positionZ[i++] = (byte)fileStreamPlayer.ReadByte();
-                        positionZ[i++] = (byte)fileStreamPlayer.ReadByte();
-                        var positionShortX = BitConverter.ToInt16(positionX, 0);
-                        var positionShortY = BitConverter.ToInt16(positionY, 0);
-                        var positionShortZ = BitConverter.ToInt16(positionZ, 0);
-                        if (processedChunks.Contains(new Chunk(null, new Vector3Short(positionShortX, positionShortY, positionShortZ))))
+                        positionX[j] = (byte)fileStreamChunk.ReadByte();
+                    }
+                    var positionY = new byte[2];
+                    for (var j = 0; j < 2; j++)
+                    {
+                        positionY[j] = (byte)fileStreamChunk.ReadByte();
+                    }
+                    var positionZ = new byte[2];
+                    for (var j = 0; j < 2; j++)
+                    {
+                        positionZ[j] = (byte)fileStreamChunk.ReadByte();
+                    }
+                    if (position.x == BitConverter.ToInt16(positionX, 0) && position.y == BitConverter.ToInt16(positionY, 0) && position.z == BitConverter.ToInt16(positionZ, 0))
+                    {
+                        var bytesChunk = new byte[chunkSize, chunkSize, chunkSize];
+                        bytePosition = fileStreamChunk.Position;
+                        var chunkSize2D = chunkSize * chunkSize;
+                        var x = 0;
+                        var y = 0;
+                        var z = 0;
+                        bytesChunk[0, 0, 0] = (byte)fileStreamChunk.ReadByte();
+                        for (var j = 1; j < chunkByteSize; j++)
                         {
-                            for (var j = 0; j < auxiliarChunks.Length; j++)
+                            if (j % chunkSize == 0)
                             {
-                                if (positionShortX == auxiliarChunks[j].position.x && positionShortY == auxiliarChunks[j].position.y && positionShortZ == auxiliarChunks[j].position.z)
-                                {
-                                    var bytesChunk = new byte[chunkByteSize];
-                                    for (var k = 0; k < chunkByteSize; k++)
-                                    {
-                                        bytesChunk[k] = (byte)fileStreamPlayer.ReadByte();
-                                    }
-                                }
+                                y++;
+                                z = 0;
                             }
+                            if (j % chunkSize2D == 0)
+                            {
+                                x++;
+                                y = 0;
+                                z = 0;
+                            }
+                            bytesChunk[x, y, z] = (byte)fileStreamChunk.ReadByte();
+                            z++;
                         }
-                        else
-                        {
-                            fileStreamPlayer.Position += chunkByteSize;
-                        }
+                        dictChunks[position] = bytesChunk;
+                        goto FindIt;
                     }
                 }
             }
-            catch
+        }
+        catch
+        {
+            Debug.Log("Exception caught in process reading chunk information");
+            return false;
+        }
+        if (bytePosition == -1)
+        {
+            return false;
+        }
+    FindIt:
+        processedChunks.Enqueue(new QueueActionCube(true, new ChunkPosition(bytePosition, position)));
+        return true;
+    }
+
+    private IEnumerator WriteChunkInformation()
+    {
+        while (true)
+        {
+        NoFindIt:
+            while (writeQueue.Count > 0)
             {
-                Debug.Log("Exception caught in process reading world information");
+                var position = writeQueue.Dequeue();
+                try
+                {
+                    using (var fileStreamChunk = new FileStream(fileWorld + ".bm", FileMode.OpenOrCreate, FileAccess.ReadWrite))
+                    {
+                        var chunkByteSize = chunkSize * chunkSize * chunkSize;
+                        if (dictChunks.ContainsKey(position))
+                        {
+                            Chunk chunk;
+                            foreach (var loadedChunk in loadedChunks)
+                            {
+                                if (loadedChunk.position.position.Equals(position) && loadedChunk.position.bytePosition != -1)
+                                {
+                                    chunk = loadedChunk;
+                                    goto FindIt;
+                                }
+                            }
+                            goto NoFindIt;
+                        FindIt:
+                            var bytesChunk = new byte[chunkByteSize];
+                            var x = 0;
+                            for (var i = 0; i < chunkSize; i++)
+                            {
+                                for (var j = 0; j < chunkSize; j++)
+                                {
+                                    for (var k = 0; k < chunkSize; k++)
+                                    {
+                                        bytesChunk[x] = chunk.chunk[i, j, k];
+                                        x++;
+                                    }
+                                }
+                            }
+                            fileStreamChunk.Seek(chunk.position.bytePosition, SeekOrigin.Begin);
+                            fileStreamChunk.Lock(0, chunkByteSize);
+                            fileStreamChunk.Write(bytesChunk, 0, chunkByteSize);
+                            fileStreamChunk.Flush();
+                            fileStreamChunk.Unlock(0, chunkByteSize);
+                        }
+                        else
+                        {
+                            var bytesChunkInformation = new byte[6 + chunkByteSize];
+                            BitConverter.GetBytes(position.x).CopyTo(bytesChunkInformation, 0);
+                            BitConverter.GetBytes(position.y).CopyTo(bytesChunkInformation, 2);
+                            BitConverter.GetBytes(position.z).CopyTo(bytesChunkInformation, 4);
+                            for (var i = 5; i < bytesChunkInformation.Length; i++)
+                            {
+                                bytesChunkInformation[i] = 0;
+                            }
+                            fileStreamChunk.Seek(fileStreamChunk.Length, SeekOrigin.Begin);
+                            fileStreamChunk.Lock(0, bytesChunkInformation.Length);
+                            fileStreamChunk.Write(bytesChunkInformation, 0, bytesChunkInformation.Length);
+                            fileStreamChunk.Flush();
+                            fileStreamChunk.Unlock(0, bytesChunkInformation.Length);
+                        }
+                    }
+                }
+                catch
+                {
+                    Debug.Log("Exception caught in process writting chunk information");
+                }
             }
-            yield return new WaitWhile(() => processedChunks.Equals(this.processedChunks) && loadedChunks.Equals(this.loadedChunks));
+            yield return new WaitWhile(() => writeQueue.Count <= 0);
         }
     }
 
-    private IEnumerator WriteWorldInfo()
+    /*private IEnumerator WriteWorldInformation()
     {
         while (true)
         {
@@ -207,42 +350,11 @@ public class CubeManager : Singleton<CubeManager>
             var chunkByteSize = chunkSize * chunkSize * chunkSize;
             try
             {
-                using (var fileStreamPlayer = new FileStream(fileWorld + ".bm", FileMode.Create))
+                using (var fileStreamWorld = new FileStream(fileWorld + ".bm", FileMode.Open))
                 {
-                    Chunk[] auxiliarChunks = new Chunk[processedChunks.Count];
-                    processedChunks.CopyTo(auxiliarChunks, 0);
-                    for (var i = 0; i < fileStreamPlayer.Length; i += chunkByteSize)
+                    foreach (var chunk in loadedChunks)
                     {
-                        var positionX = new byte[2];
-                        positionX[i++] = (byte)fileStreamPlayer.ReadByte();
-                        positionX[i++] = (byte)fileStreamPlayer.ReadByte();
-                        var positionY = new byte[2];
-                        positionY[i++] = (byte)fileStreamPlayer.ReadByte();
-                        positionY[i++] = (byte)fileStreamPlayer.ReadByte();
-                        var positionZ = new byte[2];
-                        positionZ[i++] = (byte)fileStreamPlayer.ReadByte();
-                        positionZ[i++] = (byte)fileStreamPlayer.ReadByte();
-                        var positionShortX = BitConverter.ToInt16(positionX, 0);
-                        var positionShortY = BitConverter.ToInt16(positionY, 0);
-                        var positionShortZ = BitConverter.ToInt16(positionZ, 0);
-                        if (processedChunks.Contains(new Chunk(null, new Vector3Short(positionShortX, positionShortY, positionShortZ))))
-                        {
-                            for (var j = 0; j < auxiliarChunks.Length; j++)
-                            {
-                                if (positionShortX == auxiliarChunks[j].position.x && positionShortY == auxiliarChunks[j].position.y && positionShortZ == auxiliarChunks[j].position.z)
-                                {
-                                    var bytesChunk = new byte[chunkByteSize];
-                                    for (var k = 0; k < chunkByteSize; k++)
-                                    {
-                                        bytesChunk[k] = (byte)fileStreamPlayer.ReadByte();
-                                    }
-                                }
-                            }
-                        }
-                        else
-                        {
-                            fileStreamPlayer.Position += chunkByteSize;
-                        }
+
                     }
                 }
             }
@@ -252,30 +364,5 @@ public class CubeManager : Singleton<CubeManager>
             }
             yield return new WaitWhile(() => loadedChunks.Equals(this.loadedChunks));
         }
-    }
-
-    private IEnumerator UpdatePlayerInfo()
-    {
-        while (true)
-        {
-            var playerPosition = Player.instance.transform.position;
-            try
-            {
-                using (var fileStreamPlayer = new FileStream(filePlayer + ".bm", FileMode.Create))
-                {
-
-                    var bytePlayerPosition = new byte[12];
-                    BitConverter.GetBytes(playerPosition.x).CopyTo(bytePlayerPosition, 0);
-                    BitConverter.GetBytes(playerPosition.y).CopyTo(bytePlayerPosition, 4);
-                    BitConverter.GetBytes(playerPosition.z).CopyTo(bytePlayerPosition, 8);
-                    fileStreamPlayer.Write(bytePlayerPosition, 0, 12);
-                }
-            }
-            catch
-            {
-                Debug.Log("Exception caught in process writting player information");
-            }
-            yield return new WaitWhile(() => Player.instance.transform.position.Equals(playerPosition));
-        }
-    }
+    }*/
 }
