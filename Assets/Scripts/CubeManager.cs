@@ -61,10 +61,7 @@ public class CubeManager : Singleton<CubeManager>
 
     private void Start()
     {
-        if (!ReadChunkInformation(new Vector3Short(Convert.ToInt16(playerTransform.position.x / chunkSize), Convert.ToInt16(playerTransform.position.y / chunkSize), Convert.ToInt16(playerTransform.position.z / chunkSize))))
-        {
-            writeQueue.Enqueue(new Vector3Short(Convert.ToInt16(playerTransform.position.x / chunkSize), Convert.ToInt16(playerTransform.position.y / chunkSize), Convert.ToInt16(playerTransform.position.z / chunkSize)));
-        }
+        StartCoroutine(CheckPositionPlayer());
         StartCoroutine(WriteChunkInformation());
         //StartCoroutine(WriteWorldInformation());
     }
@@ -73,31 +70,37 @@ public class CubeManager : Singleton<CubeManager>
     {
         foreach (var chunk in loadedChunks)
         {
-            if ((playerTransform.position - chunk.position.position.ToVector3Float() * chunkSize).magnitude >= processedDistance)
+            Debug.Log("foreach loadedChunks " + chunk.position.bytePosition);
+            Debug.Log("foreach loadedChunks player " + playerTransform.position.x + " " + playerTransform.position.y + " " + playerTransform.position.z);
+            var auxPos = chunk.position.position.ToVector3Float() * chunkSize;
+            Debug.Log("foreach loadedChunks chunk " + auxPos.x + " " + auxPos.y + " " + auxPos.z);
+            if ((playerTransform.position - (chunk.position.position.ToVector3Float() * chunkSize)).magnitude >= processedDistance)
             {
+                Debug.Log("foreach loadedChunks >=processedDistance " + chunk.position.bytePosition);
                 processedChunks.Enqueue(new QueueActionCube(false, chunk.position));
             }
         }
         if (processedChunks.Count > 0)
         {
-            Debug.Log(processedChunks.Count);
-            Debug.Log(loadedChunks.Count);
-            Debug.Log(dictChunks.Count);
+            Debug.Log("processedChunks Count>0 " + processedChunks.Count);
             var chunkAction = processedChunks.Dequeue();
             var chunkPosition = chunkAction.position;
             var chunkVectorPosition = chunkPosition.position;
             if (chunkAction.add)
             {
+                Debug.Log("true " + chunkVectorPosition.x);
                 if ((playerTransform.position - chunkVectorPosition.ToVector3Float() * chunkSize).magnitude < processedDistance)
                 {
+                    Debug.Log("true <processedDistance " + chunkVectorPosition.x);
                     if (dictChunks.ContainsKey(chunkVectorPosition) && dictChunks[chunkVectorPosition] != null)
                     {
-                        var halfChunkSize = (int)chunkSize / 2;
-                        for (var x = 0; x < chunkSize; x++)
+                        Debug.Log("true dictChunks Contains !=null " + chunkVectorPosition.x);
+                        int halfChunkSize = chunkSize / 2;
+                        for (int x = 0; x < chunkSize; x++)
                         {
-                            for (var y = 0; y < chunkSize; y++)
+                            for (int y = 0; y < chunkSize; y++)
                             {
-                                for (var z = 0; z < chunkSize; z++)
+                                for (int z = 0; z < chunkSize; z++)
                                 {
                                     if (dictChunks[chunkVectorPosition][x, y, z] != 0)
                                     {
@@ -105,31 +108,42 @@ public class CubeManager : Singleton<CubeManager>
                                         if (!Player.instance.grid[false].Contains(addedCube) && !Player.instance.grid[true].Contains(addedCube))
                                         {
                                             Player.instance.grid[false].Add(addedCube);
+                                            Debug.Log("true dictChunks Contains !=null for " + chunkVectorPosition.x * chunkSize + x);
                                         }
                                     }
                                 }
                             }
                         }
+                        Debug.Log("true dictChunks Contains !=null after for " + chunkVectorPosition.x);
                         var chunk = new Chunk(dictChunks[chunkVectorPosition], chunkPosition);
                         if (!loadedChunks.Contains(chunk))
                         {
+                            Debug.Log("true dictChunks Contains !=null loadChunks NoContains " + chunk.position.bytePosition);
                             loadedChunks.Add(chunk);
                             var rightChunk = new Chunk(null, new ChunkPosition(-1, new Vector3Short(++chunkVectorPosition.x, chunkVectorPosition.y, chunkVectorPosition.z)));
                             chunkVectorPosition.x--;
+                            Debug.Log("true dictChunks Contains !=null loadChunks NoContains right " + chunkVectorPosition.x);
                             var leftChunk = new Chunk(null, new ChunkPosition(-1, new Vector3Short(--chunkVectorPosition.x, chunkVectorPosition.y, chunkVectorPosition.z)));
                             chunkVectorPosition.x++;
+                            Debug.Log("true dictChunks Contains !=null loadChunks NoContains left " + chunkVectorPosition.x);
                             var upChunk = new Chunk(null, new ChunkPosition(-1, new Vector3Short(chunkVectorPosition.x, ++chunkVectorPosition.y, chunkVectorPosition.z)));
                             chunkVectorPosition.y--;
+                            Debug.Log("true dictChunks Contains !=null loadChunks NoContains up " + chunkVectorPosition.y);
                             var downChunk = new Chunk(null, new ChunkPosition(-1, new Vector3Short(chunkVectorPosition.x, --chunkVectorPosition.y, chunkVectorPosition.z)));
                             chunkVectorPosition.y++;
+                            Debug.Log("true dictChunks Contains !=null loadChunks NoContains down " + chunkVectorPosition.y);
                             var forwardChunk = new Chunk(null, new ChunkPosition(-1, new Vector3Short(chunkVectorPosition.x, chunkVectorPosition.y, ++chunkVectorPosition.z)));
                             chunkVectorPosition.z--;
+                            Debug.Log("true dictChunks Contains !=null loadChunks NoContains forward " + chunkVectorPosition.z);
                             var backwardChunk = new Chunk(null, new ChunkPosition(-1, new Vector3Short(chunkVectorPosition.x, chunkVectorPosition.y, --chunkVectorPosition.z)));
                             chunkVectorPosition.z++;
+                            Debug.Log("true dictChunks Contains !=null loadChunks NoContains backward " + chunkVectorPosition.z);
                             if (!dictChunks.ContainsKey(rightChunk.position.position))
                             {
+                                Debug.Log("true dictChunks Contains !=null loadChunks NoContains right dictChunks NoContains " + chunkVectorPosition.x);
                                 if (!ReadChunkInformation(rightChunk.position.position))
                                 {
+                                    Debug.Log("true dictChunks Contains !=null loadChunks NoContains right dictChunks NoContains !Read" + chunkVectorPosition.x);
                                     writeQueue.Enqueue(rightChunk.position.position);
                                     processedChunks.Enqueue(new QueueActionCube(true, rightChunk.position));
                                 }
@@ -175,7 +189,6 @@ public class CubeManager : Singleton<CubeManager>
                                 }
                             }
                         }
-
                     }
                     else
                     {
@@ -183,14 +196,21 @@ public class CubeManager : Singleton<CubeManager>
                         processedChunks.Enqueue(chunkAction);
                     }
                 }
+                else
+                {
+                    processedChunks.Enqueue(new QueueActionCube(false, chunkPosition));
+                }
             }
             else
             {
+                Debug.Log("false " + chunkVectorPosition.x);
                 if (dictChunks.ContainsKey(chunkVectorPosition))
                 {
+                    Debug.Log("false dictChunks Contains " + chunkVectorPosition.x);
                     var chunk = new Chunk(dictChunks[chunkVectorPosition], chunkPosition);
                     if (loadedChunks.Contains(chunk))
                     {
+                        Debug.Log("false loadedChunks Contains " + chunk.position.bytePosition);
                         loadedChunks.Remove(chunk);
                     }
                     dictChunks.Remove(chunkVectorPosition);
@@ -201,40 +221,42 @@ public class CubeManager : Singleton<CubeManager>
 
     private bool ReadChunkInformation(Vector3Short position)
     {
-        var bytePosition = (long)-1;
+        Debug.Log("Read " + position.x);
+        long bytePosition = -1;
         try
         {
+            Debug.Log("Read try " + position.x);
             using (var fileStreamChunk = new FileStream(fileWorld + ".bm", FileMode.Open))
             {
-                var chunkByteSize = chunkSize * chunkSize * chunkSize;
-                for (var i = 0; i < fileStreamChunk.Length; i += 6 + chunkByteSize)
+                Debug.Log("Read try FileStream " + position.x);
+                int chunkByteSize = chunkSize * chunkSize * chunkSize;
+                long fileSize = fileStreamChunk.Length;
+                for (long i = 0; i < fileSize; i += 6 + chunkByteSize)
                 {
+                    Debug.Log("Read try FileStream for " + i);
+                    Debug.Log("Read try FileStream for Seek " + SeekOrigin.Begin);
                     fileStreamChunk.Seek(i, SeekOrigin.Begin);
                     var positionX = new byte[2];
-                    for (var j = 0; j < 2; j++)
-                    {
-                        positionX[j] = (byte)fileStreamChunk.ReadByte();
-                    }
+                    positionX[0] = (byte)fileStreamChunk.ReadByte();
+                    positionX[1] = (byte)fileStreamChunk.ReadByte();
                     var positionY = new byte[2];
-                    for (var j = 0; j < 2; j++)
-                    {
-                        positionY[j] = (byte)fileStreamChunk.ReadByte();
-                    }
+                    positionY[0] = (byte)fileStreamChunk.ReadByte();
+                    positionY[1] = (byte)fileStreamChunk.ReadByte();
                     var positionZ = new byte[2];
-                    for (var j = 0; j < 2; j++)
-                    {
-                        positionZ[j] = (byte)fileStreamChunk.ReadByte();
-                    }
+                    positionZ[0] = (byte)fileStreamChunk.ReadByte();
+                    positionZ[1] = (byte)fileStreamChunk.ReadByte();
+                    Debug.Log("Read try FileStream for read " + BitConverter.ToInt16(positionX, 0) + " " + BitConverter.ToInt16(positionY, 0) + " " + BitConverter.ToInt16(positionZ, 0));
                     if (position.x == BitConverter.ToInt16(positionX, 0) && position.y == BitConverter.ToInt16(positionY, 0) && position.z == BitConverter.ToInt16(positionZ, 0))
                     {
+                        Debug.Log("Read try FileStream for find " + i);
                         var bytesChunk = new byte[chunkSize, chunkSize, chunkSize];
                         bytePosition = fileStreamChunk.Position;
-                        var chunkSize2D = chunkSize * chunkSize;
-                        var x = 0;
-                        var y = 0;
-                        var z = 0;
+                        int chunkSize2D = chunkSize * chunkSize;
+                        int x = 0;
+                        int y = 0;
+                        int z = 0;
                         bytesChunk[0, 0, 0] = (byte)fileStreamChunk.ReadByte();
-                        for (var j = 1; j < chunkByteSize; j++)
+                        for (int j = 1; j < chunkByteSize; j++)
                         {
                             if (j % chunkSize == 0)
                             {
@@ -263,11 +285,27 @@ public class CubeManager : Singleton<CubeManager>
         }
         if (bytePosition == -1)
         {
+            Debug.Log("Read false");
             return false;
         }
     FindIt:
+        Debug.Log("Read true " + bytePosition);
         processedChunks.Enqueue(new QueueActionCube(true, new ChunkPosition(bytePosition, position)));
         return true;
+    }
+
+    private IEnumerator CheckPositionPlayer()
+    {
+        while (true)
+        {
+            Debug.Log("CheckPositionPlayer");
+            if (!ReadChunkInformation(new Vector3Short(Convert.ToInt16(playerTransform.position.x / chunkSize), Convert.ToInt16(playerTransform.position.y / chunkSize), Convert.ToInt16(playerTransform.position.z / chunkSize))))
+            {
+                Debug.Log("CheckPositionPlayer Read");
+                writeQueue.Enqueue(new Vector3Short(Convert.ToInt16(playerTransform.position.x / chunkSize), Convert.ToInt16(playerTransform.position.y / chunkSize), Convert.ToInt16(playerTransform.position.z / chunkSize)));
+            }
+            yield return new WaitWhile(() => loadedChunks.Count > 0);
+        }
     }
 
     private IEnumerator WriteChunkInformation()
@@ -275,16 +313,21 @@ public class CubeManager : Singleton<CubeManager>
         while (true)
         {
         NoFindIt:
+            Debug.Log("WriteChunkInformation");
             while (writeQueue.Count > 0)
             {
+                Debug.Log("WriteChunkInformation writeQueue>0");
                 var position = writeQueue.Dequeue();
                 try
                 {
+                    Debug.Log("WriteChunkInformation try " + position.x);
                     using (var fileStreamChunk = new FileStream(fileWorld + ".bm", FileMode.OpenOrCreate, FileAccess.ReadWrite))
                     {
-                        var chunkByteSize = chunkSize * chunkSize * chunkSize;
+                        Debug.Log("WriteChunkInformation FileStream " + position.x);
+                        int chunkByteSize = chunkSize * chunkSize * chunkSize;
                         if (dictChunks.ContainsKey(position))
                         {
+                            Debug.Log("WriteChunkInformation dictChunks Contains " + position.x);
                             Chunk chunk;
                             foreach (var loadedChunk in loadedChunks)
                             {
@@ -294,39 +337,47 @@ public class CubeManager : Singleton<CubeManager>
                                     goto FindIt;
                                 }
                             }
+                            Debug.Log("WriteChunkInformation dictChunks Contains NoFindIt " + position.x);
+                            writeQueue.Enqueue(position);
                             goto NoFindIt;
                         FindIt:
+                            Debug.Log("WriteChunkInformation dictChunks Contains FindIt " + chunk.position.bytePosition);
                             var bytesChunk = new byte[chunkByteSize];
-                            var x = 0;
-                            for (var i = 0; i < chunkSize; i++)
+                            int x = 0;
+                            for (int i = 0; i < chunkSize; i++)
                             {
-                                for (var j = 0; j < chunkSize; j++)
+                                for (int j = 0; j < chunkSize; j++)
                                 {
-                                    for (var k = 0; k < chunkSize; k++)
+                                    for (int k = 0; k < chunkSize; k++)
                                     {
                                         bytesChunk[x] = chunk.chunk[i, j, k];
                                         x++;
                                     }
                                 }
                             }
+                            Debug.Log("WriteChunkInformation dictChunks Contains Lock " + chunk.position.bytePosition);
                             fileStreamChunk.Seek(chunk.position.bytePosition, SeekOrigin.Begin);
                             fileStreamChunk.Lock(0, chunkByteSize);
+                            Debug.Log("WriteChunkInformation dictChunks Contains Write " + chunk.position.bytePosition);
                             fileStreamChunk.Write(bytesChunk, 0, chunkByteSize);
                             fileStreamChunk.Flush();
                             fileStreamChunk.Unlock(0, chunkByteSize);
                         }
                         else
                         {
+                            Debug.Log("WriteChunkInformation dictChunks NoContains " + position.x);
                             var bytesChunkInformation = new byte[6 + chunkByteSize];
                             BitConverter.GetBytes(position.x).CopyTo(bytesChunkInformation, 0);
                             BitConverter.GetBytes(position.y).CopyTo(bytesChunkInformation, 2);
                             BitConverter.GetBytes(position.z).CopyTo(bytesChunkInformation, 4);
-                            for (var i = 5; i < bytesChunkInformation.Length; i++)
+                            for (int i = 6; i < bytesChunkInformation.Length; i++)
                             {
                                 bytesChunkInformation[i] = 0;
                             }
+                            Debug.Log("WriteChunkInformation dictChunks NoContains Lock " + position.x);
                             fileStreamChunk.Seek(fileStreamChunk.Length, SeekOrigin.Begin);
                             fileStreamChunk.Lock(0, bytesChunkInformation.Length);
+                            Debug.Log("WriteChunkInformation dictChunks NoContains Write " + fileStreamChunk.Length);
                             fileStreamChunk.Write(bytesChunkInformation, 0, bytesChunkInformation.Length);
                             fileStreamChunk.Flush();
                             fileStreamChunk.Unlock(0, bytesChunkInformation.Length);
@@ -335,7 +386,7 @@ public class CubeManager : Singleton<CubeManager>
                 }
                 catch
                 {
-                    Debug.Log("Exception caught in process writting chunk information");
+                    Debug.Log("Exception caught in process writing chunk information");
                 }
             }
             yield return new WaitWhile(() => writeQueue.Count <= 0);
@@ -347,7 +398,7 @@ public class CubeManager : Singleton<CubeManager>
         while (true)
         {
             var loadedChunks = this.loadedChunks;
-            var chunkByteSize = chunkSize * chunkSize * chunkSize;
+            int chunkByteSize = chunkSize * chunkSize * chunkSize;
             try
             {
                 using (var fileStreamWorld = new FileStream(fileWorld + ".bm", FileMode.Open))
@@ -360,7 +411,7 @@ public class CubeManager : Singleton<CubeManager>
             }
             catch
             {
-                Debug.Log("Exception caught in process writting world information");
+                Debug.Log("Exception caught in process writing world information");
             }
             yield return new WaitWhile(() => loadedChunks.Equals(this.loadedChunks));
         }

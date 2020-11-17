@@ -154,7 +154,6 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   cubeType: {fileID: 4400337287595461280, guid: fd9e57ffcf25c7345b5d136131153752,
     type: 3}
-  size: 16
 --- !u!4 &624887711
 Transform:
   m_ObjectHideFlags: 0
@@ -184,7 +183,6 @@ MonoBehaviour:
   chunkSize: 16
   processedDistance: 2
   fileWorld: Saves/World
-  filePlayer: Saves/Player
 --- !u!114 &624887713
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -335,8 +333,9 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   sensitivity: 2
   maxYAngle: 90
-  despawnDistance: 64
-  movementSpeed: 2
+  despawnDistance: 16
+  movementSpeed: 4
+  filePlayer: Saves/Player
 --- !u!20 &1463311678
 Camera:
   m_ObjectHideFlags: 0

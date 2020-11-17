@@ -58,17 +58,17 @@ public class Player : Singleton<Player>
             using (var fileStreamPlayer = new FileStream(filePlayer + ".bm", FileMode.Open))
             {
                 var positionX = new byte[4];
-                for (var i = 0; i < 4; i++)
+                for (int i = 0; i < 4; i++)
                 {
                     positionX[i] = (byte)fileStreamPlayer.ReadByte();
                 }
                 var positionY = new byte[4];
-                for (var i = 0; i < 4; i++)
+                for (int i = 0; i < 4; i++)
                 {
                     positionY[i] = (byte)fileStreamPlayer.ReadByte();
                 }
                 var positionZ = new byte[4];
-                for (var i = 0; i < 4; i++)
+                for (int i = 0; i < 4; i++)
                 {
                     positionZ[i] = (byte)fileStreamPlayer.ReadByte();
                 }
@@ -111,8 +111,8 @@ public class Player : Singleton<Player>
             _transform.position -= _transform.forward * movementSpeed * Time.deltaTime;
         }
 
-        var y = Input.GetAxis("Mouse Y");
-        var x = Input.GetAxis("Mouse X");
+        float y = Input.GetAxis("Mouse Y");
+        float x = Input.GetAxis("Mouse X");
         if (y != 0.0f && x != 0.0f)
         {
             rotation = new Vector2(Mathf.Clamp(rotation.x - y * sensitivity, -maxYAngle, maxYAngle), Mathf.Repeat(rotation.y + x * sensitivity, 360));
@@ -183,12 +183,14 @@ public class Player : Singleton<Player>
                     BitConverter.GetBytes(playerPosition.x).CopyTo(bytePlayerPosition, 0);
                     BitConverter.GetBytes(playerPosition.y).CopyTo(bytePlayerPosition, 4);
                     BitConverter.GetBytes(playerPosition.z).CopyTo(bytePlayerPosition, 8);
+                    fileStreamPlayer.Lock(0, 12);
                     fileStreamPlayer.Write(bytePlayerPosition, 0, 12);
+                    fileStreamPlayer.Unlock(0, 12);
                 }
             }
             catch
             {
-                Debug.Log("Exception caught in process writting player information");
+                Debug.Log("Exception caught in process writing player information");
             }
             yield return new WaitWhile(() => _transform.position.Equals(playerPosition));
         }
